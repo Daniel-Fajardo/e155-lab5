@@ -1,6 +1,6 @@
 // Daniel Fajardo
 // dfajardo@g.hmc.edu
-// 10/06/2024
+// 10/22/2024
 // 
 // main script for lab5
 
@@ -10,7 +10,16 @@
 #define PULSEA PA2 // input pin for pulse A
 #define PULSEB PA3 // input pin for pulse B
 
+// global variables
+int loopdelay = 500; //
+volatile uint32_t timecurrent = 0;
+volatile uint32_t timepreva = 0;
+volatile uint32_t timeprevb = 0;
+volatile int direction = 0;
+volatile float angularvelocity = 0;
+
 int main(void) {
+    // configureFlash();
     // enable motor pulse A of quadrature encoder
     gpioEnable(GPIO_PORT_A);
     pinMode(PULSEA, GPIO_INPUT);
@@ -22,7 +31,7 @@ int main(void) {
 
     // Initialize timer
     RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
-    initTIM(DELAY_TIM);
+    initTIM(TIM2);
 
     // Enable SYSCFG clock domain in RCC
     RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
@@ -45,34 +54,62 @@ int main(void) {
 
     // Configure interrupt for falling edge of GPIO pin for PULSEB
     // Configure mask bit
-    EXTI->IMR2 |= (1 << gpioPinOffset(PULSEB)); // Configure the mask bit
+    EXTI->IMR1 |= (1 << gpioPinOffset(PULSEB)); // Configure the mask bit
     // Disable rising edge trigger
-    EXTI->RTSR2 &= ~(1 << gpioPinOffset(PULSEB));// Disable rising edge trigger
+    EXTI->RTSR1 &= ~(1 << gpioPinOffset(PULSEB));// Disable rising edge trigger
     // Enable falling edge trigger
-    EXTI->FTSR2 |= (1 << gpioPinOffset(PULSEB));// Enable falling edge trigger
+    EXTI->FTSR1 |= (1 << gpioPinOffset(PULSEB));// Enable falling edge trigger
     // Turn on EXTI interrupt in NVIC_ISER
     NVIC->ISER[1] |= (1 << EXTI3_IRQn); // check to make sure IRQn maps to value 9 (position 9 in vector table)
 
+    while (1) {
+        delay_millis(TIM2, loopdelay);
+        printf("%.3f angular velocity = ", angularvelocity);
+        printf(" rev/s\n");
+        if (direction==1) {printf("direction is cw\n");}
+        else if (direction==-1) {printf("direction is ccw\n");}
+        else {printf("direction is undetermined\n");}
+    }
 }
 
 void EXTI2_IRQHandler(void){
     // Check that the pulse was what triggered our interrupt
-    if (EXTI->PR1 & (1 << 0)){
+    if (EXTI->PR1 & (1 << 2)){
         // If so, clear the interrupt (NB: Write 1 to reset.)
-        EXTI->PR1 |= (1 << 0);
+        EXTI->PR1 |= (1 << 2);
 
-        // Record the time of pulse
-        // ----
+        timecurrent = TIM2->CNT; // Record the time of PULSEA
+
+        uint32_t timedelta = timecurrent - timepreva; // Time for 1 revolution
+        angularvelocity = 1000/timedelta; // Angular velocity calculation
+        
+        if (timepreva < timeprevb){
+            direction = 1;
+        }
+        else {
+            direction = -1;
+        }
+        TIM2->CNT = 0; // reset counter (only done in interrupt A to determine direction)
+        TIM2->EGR |= (1<<0); // update event
+
+        timepreva = timecurrent; // record previous time
+
+
     }
 }
 
 void EXTI3_IRQHandler(void){
     // Check that the pulse was what triggered our interrupt
-    if (EXTI->PR2 & (1 << 0)){
+    if (EXTI->PR1 & (1 << 3)){
         // If so, clear the interrupt (NB: Write 1 to reset.)
-        EXTI->PR2 |= (1 << 0);
+        EXTI->PR1 |= (1 << 3);
 
-        // Record the time of pulse
-        // ----
+        timecurrent = TIM2->CNT; // Record the time of PULSEB
+
+        uint32_t timedelta = timecurrent - timeprevb; // Time for 1 revolution
+        angularvelocity = 1000/timedelta; // Angular velocity calculation
+
+        timeprevb = timecurrent; // record previous time
     }
 }
+
