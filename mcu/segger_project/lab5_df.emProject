@@ -43,6 +43,10 @@
       project_directory=""
       project_type="Executable"
       target_reset_script="Reset();" />
+    <configuration
+      Name="Debug"
+      linker_printf_fp_enabled="Float"
+      linker_printf_width_precision_supported="Yes" />
     <folder Name="CMSIS Files">
       <file file_name="STM32L4xx/Device/Include/stm32l4xx.h" />
       <file file_name="STM32L4xx/Device/Source/system_stm32l4xx.c">
@@ -59,6 +63,7 @@
     </folder>
     <folder Name="Source Files">
       <configuration Name="Common" filter="c;cpp;cxx;cc;h;s;asm;inc" />
+      <configuration Name="Debug" c_user_include_directories="." />
       <file file_name="../src/lab5_df.c" />
       <file file_name="../src/STM32L432KC.h" />
       <file file_name="../src/STM32L432KC_FLASH.c" />
