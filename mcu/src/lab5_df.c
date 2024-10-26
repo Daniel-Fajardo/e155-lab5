@@ -11,13 +11,21 @@
 #define PULSEA PA5 // input pin for pulse A
 #define PULSEB PA10 // input pin for pulse B
 
+// function prototypes
+float calculate_velocity(int delayloop);
+int calculate_direction(void);
+
 // global variables
-int loopdelay = 1000; // in ms
+int loopdelay = 1000000; // in micro seconds (us)
 volatile uint32_t timecurrent = 0;
 volatile uint32_t timepreva = 0;
 volatile uint32_t timeprevb = 0;
+volatile uint32_t timediffa = 0;
+volatile uint32_t timediffb = 0;
 volatile int direction = 0;
 volatile float angularvelocity = 0;
+volatile int indexa = 0;
+volatile int indexb = 0;
 
 int main(void) {
     // configureFlash();
@@ -62,7 +70,9 @@ int main(void) {
     NVIC->ISER[1] |= (1 << (EXTI15_10_IRQn-32)); // check to make sure IRQn maps to value 40 (vector table) (shift by 32)
 
     while (1) {
-        delay_millis(TIM2, loopdelay);
+        delay_micros(TIM2, loopdelay);
+        calculate_velocity(loopdelay);
+        calculate_direction();
         printf("angular velocity = %.3f", angularvelocity); // ensure that segger project settings->printf->floating-point enabled
         printf(" rev/s\n");
         if (direction==1) {printf("direction is cw\n");}
@@ -77,25 +87,12 @@ void EXTI9_5_IRQHandler(void){
         // If so, clear the interrupt (NB: Write 1 to reset.)
         EXTI->PR1 |= (1 << PULSEA);
 
+        indexa++; // count number of cycles
+
         timecurrent = TIM6->CNT; // Record the time of PULSEA
-        // printf("PULSEA\n");
-        // printf("%u\n",timecurrent);
 
-        uint32_t timedelta = timecurrent - timepreva; // Time for 1 revolution
-        angularvelocity = 1000/120/timedelta; // Angular velocity calculation
-        
-        if (timepreva < timeprevb){
-            direction = 1;
-        }
-        else {
-            direction = -1;
-        }
-        TIM6->CNT = 0; // reset counter (only done in interrupt A to determine direction)
-        TIM6->EGR |= (1<<0); // update event
-
+        timediffa = timeprevb - timepreva; // Time for 1 revolution
         timepreva = timecurrent; // record previous time
-
-
     }
 }
 
@@ -105,14 +102,35 @@ void EXTI15_10_IRQHandler(void){
         // If so, clear the interrupt (NB: Write 1 to reset.)
         EXTI->PR1 |= (1 << PULSEB);
 
+        indexb++; // count number of cycles
+
         timecurrent = TIM6->CNT; // Record the time of PULSEB
-        // printf("PULSEB\n");
-        // printf("%u\n",timecurrent);
-
-        uint32_t timedelta = timecurrent - timeprevb; // Time for 1 revolution
-        angularvelocity = 1000/120/timedelta; // Angular velocity calculation
-
+        
+        timediffb = timepreva - timeprevb; // Time for 1 revolution
         timeprevb = timecurrent; // record previous time
     }
 }
 
+
+float calculate_velocity(int delayloop){
+    if (indexa!=indexb) {printf("index not equal\n");}
+
+    angularvelocity = indexa*1000000/delayloop; // in pulse/s
+    angularvelocity = angularvelocity/120; // in rev/s (120 pulses per revolution)
+    indexa = 0; // reset indexes
+    indexb = 0;
+
+    return angularvelocity;
+}
+
+int calculate_direction(void){
+    // check if falling edges are closer for A->B or B->A
+    if (timediffa < timediffb){
+      direction = 1;
+    }
+    else {
+      direction = -1;
+    }
+    
+    return direction;
+}
